@@ -79,6 +79,16 @@ export const SPRITES: Record<string, string[]> = {
     "..MMMM..",
     "........",
   ],
+  grave: [
+    "........",
+    ".GGGGGG.",
+    ".GDDDDG.",
+    ".GD..DG.",
+    ".GDDDDG.",
+    ".GGGGGG.",
+    ".GGGGGG.",
+    "........",
+  ],
 };
 
 export const SPRITE_PALETTES: Record<string, Record<string, string>> = {
@@ -90,6 +100,7 @@ export const SPRITE_PALETTES: Record<string, Record<string, string>> = {
   book: { B: "#b0713f", W: "#f2ead8" },
   water: { C: "#4de3ff", L: "#d8f8ff" },
   moon: { M: "#ffd93d" },
+  grave: { G: "#aab2c0", D: "#20261f" },
 };
 
 export const SPRITE_OPTIONS = [

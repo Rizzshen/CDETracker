@@ -24,6 +24,7 @@ import {
   type Habit,
 } from "@/lib/habits";
 import { colorHex } from "@/lib/colors";
+import { getNews } from "@/lib/roasts";
 import { Px, SPRITES, SPRITE_PALETTES, SPRITE_OPTIONS } from "./sprites";
 
 type Profile = {
@@ -194,6 +195,14 @@ export default function Tracker({
   const herName = partner ? (partner.email ?? "P2").split("@")[0] : null;
   const myHex = colorHex(myProfile?.color, "#4de3ff");
   const herHex = colorHex(partner?.color, "#ff5da2");
+  const myNews = useMemo(
+    () => getNews(myHist, myHabits, "me"),
+    [myHist, myHabits],
+  );
+  const herNews = useMemo(
+    () => getNews(partnerHist, herHabits, "them"),
+    [partnerHist, herHabits],
+  );
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-night font-retro text-white">
@@ -220,6 +229,7 @@ export default function Tracker({
             hex={myHex}
             count={myCount}
             streak={myStreak}
+            news={myNews}
           />
           <div
             className="animate-pulse self-center font-pixel text-xs"
@@ -235,6 +245,7 @@ export default function Tracker({
             waiting={!partnerUid}
             peekOpen={peek}
             onPeek={() => setPeek((p) => !p)}
+            news={partner ? herNews : undefined}
           />
         </section>
 
@@ -256,6 +267,11 @@ export default function Tracker({
               >
                 [X]
               </button>
+              {partner && herNews.funeral && (
+                <p className="mt-3 text-center font-pixel text-[8px] text-p2 animate-pulse">
+                  💀 SHE LOST A {herNews.funeral.length} DAY STREAK
+                </p>
+              )}
             </div>
 
             <div className="mt-3 space-y-2">
@@ -335,6 +351,27 @@ export default function Tracker({
             glow="#ff5da2"
           />
         </div>
+        {(myNews.missed || (partner && herNews.missed)) && (
+          <div className="mt-6 space-y-2">
+            <h2 className="font-pixel text-[10px] text-coin [text-shadow:0_0_8px_rgba(255,217,61,0.6)]">
+              ► OVERNIGHT NEWS
+            </h2>
+            {myNews.missed && (
+              <NewsCard
+                title="YOU SKIPPED YESTERDAY"
+                roast={myNews.roast}
+                funeral={myNews.funeral}
+              />
+            )}
+            {partner && herNews.missed && (
+              <NewsCard
+                title={`${(herName ?? "P2").toUpperCase()} SKIPPED YESTERDAY`}
+                roast={herNews.roast}
+                funeral={herNews.funeral}
+              />
+            )}
+          </div>
+        )}
 
         <div className="mt-8 flex items-center justify-between">
           <h2 className="font-pixel text-[10px] text-lime [text-shadow:0_0_8px_rgba(141,255,91,0.6)]">
@@ -487,6 +524,40 @@ export default function Tracker({
   );
 }
 
+function NewsCard({
+  title,
+  roast,
+  funeral,
+}: {
+  title: string;
+  roast: string;
+  funeral: { length: number; cause: string } | null;
+}) {
+  return (
+    <div className="border-4 border-black bg-[#2a1020] p-3 shadow-[0_4px_0_0_#000]">
+      <div className="flex items-center gap-3">
+        <Px
+          rows={SPRITES.grave}
+          palette={SPRITE_PALETTES.grave}
+          className="h-8 w-8 shrink-0"
+        />
+        <div className="min-w-0">
+          <p className="font-pixel text-[8px] text-coin">{title}</p>
+          <p className="mt-1 font-retro text-lg leading-none text-white/70">
+            {roast}
+          </p>
+          {funeral && (
+            <p className="mt-2 font-pixel text-[8px] leading-relaxed text-white/50">
+              HERE LIES A {funeral.length} DAY STREAK
+              <br />
+              CAUSE: {funeral.cause}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 function PlayerCard({
   name,
   hex,
@@ -495,6 +566,7 @@ function PlayerCard({
   waiting,
   peekOpen,
   onPeek,
+  news,
 }: {
   name: string;
   hex: string;
@@ -503,6 +575,7 @@ function PlayerCard({
   waiting?: boolean;
   peekOpen?: boolean;
   onPeek?: () => void;
+  news?: any;
 }) {
   return (
     <div className="border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]">
@@ -538,12 +611,27 @@ function PlayerCard({
 
       <div className="mt-2 flex items-center justify-between">
         <span className="flex items-center gap-1">
-          <Px
-            rows={SPRITES.flame}
-            palette={SPRITE_PALETTES.flame}
-            className="h-4 w-4"
-          />
-          <span className="font-pixel text-[8px] text-coin">{streak}</span>
+          {news?.funeral ? (
+            <>
+              <Px
+                rows={SPRITES.grave}
+                palette={SPRITE_PALETTES.grave}
+                className="h-4 w-4"
+              />
+              <span className="font-pixel text-[8px] text-white/50 line-through">
+                {streak}
+              </span>
+            </>
+          ) : (
+            <>
+              <Px
+                rows={SPRITES.flame}
+                palette={SPRITE_PALETTES.flame}
+                className="h-4 w-4"
+              />
+              <span className="font-pixel text-[8px] text-coin">{streak}</span>
+            </>
+          )}
         </span>
         <span className="font-pixel text-[8px] text-white/50">
           {count * 100} PTS
