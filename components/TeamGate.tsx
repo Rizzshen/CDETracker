@@ -11,6 +11,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { COLOR_OPTIONS } from "@/lib/colors";
 import { Px, SPRITES } from "./sprites";
 
 function makeCode() {
@@ -26,6 +27,7 @@ export default function TeamGate({ uid }: { uid: string }) {
   const [codeInput, setCodeInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [color, setColor] = useState("cyan");
 
   async function startTeam() {
     setBusy(true);
@@ -39,8 +41,8 @@ export default function TeamGate({ uid }: { uid: string }) {
       });
       await setDoc(
         doc(db, "users", uid),
-        { coupleId: ref.id },
-        { merge: true }
+        { coupleId: ref.id, color },
+        { merge: true },
       );
     } catch (e: any) {
       setError(e.message);
@@ -56,8 +58,8 @@ export default function TeamGate({ uid }: { uid: string }) {
       const snap = await getDocs(
         query(
           collection(db, "couples"),
-          where("code", "==", codeInput.trim().toUpperCase())
-        )
+          where("code", "==", codeInput.trim().toUpperCase()),
+        ),
       );
       if (snap.empty) {
         setError("TEAM NOT FOUND");
@@ -68,8 +70,8 @@ export default function TeamGate({ uid }: { uid: string }) {
       if (members.includes(uid)) {
         await setDoc(
           doc(db, "users", uid),
-          { coupleId: coupleDoc.id },
-          { merge: true }
+          { coupleId: coupleDoc.id, color },
+          { merge: true },
         );
         return;
       }
@@ -80,12 +82,12 @@ export default function TeamGate({ uid }: { uid: string }) {
       await setDoc(
         doc(db, "couples", coupleDoc.id),
         { members: [...members, uid] },
-        { merge: true }
+        { merge: true },
       );
       await setDoc(
         doc(db, "users", uid),
-        { coupleId: coupleDoc.id },
-        { merge: true }
+        { coupleId: coupleDoc.id, color },
+        { merge: true },
       );
     } catch (e: any) {
       setError(e.message);
@@ -102,14 +104,47 @@ export default function TeamGate({ uid }: { uid: string }) {
 
       <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-4">
         <div className="flex justify-center gap-3">
-          <Px rows={SPRITES.heart} palette={{ P: "#4de3ff" }} className="h-6 w-6" glow="#4de3ff" />
-          <Px rows={SPRITES.heart} palette={{ P: "#ff5da2" }} className="h-6 w-6" glow="#ff5da2" />
+          <Px
+            rows={SPRITES.heart}
+            palette={{ P: "#4de3ff" }}
+            className="h-6 w-6"
+            glow="#4de3ff"
+          />
+          <Px
+            rows={SPRITES.heart}
+            palette={{ P: "#ff5da2" }}
+            className="h-6 w-6"
+            glow="#ff5da2"
+          />
         </div>
         <h1 className="mt-4 text-center font-pixel text-lg text-coin [text-shadow:0_0_12px_rgba(255,217,61,0.7)]">
           EVERY QUEST NEEDS A DUO
         </h1>
 
-        <div className="mt-8 space-y-4 border-4 border-black bg-panel p-5 shadow-[0_6px_0_0_#000]">
+        {/* character creation */}
+        <div className="mt-6 border-4 border-black bg-panel p-4 shadow-[0_4px_0_0_#000]">
+          <p className="text-center font-pixel text-[8px] text-white/60">
+            PICK YOUR PLAYER COLOR
+          </p>
+          <div className="mt-3 flex justify-center gap-2">
+            {COLOR_OPTIONS.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setColor(c.id)}
+                aria-label={c.name}
+                className={`h-8 w-8 border-2 border-black transition ${
+                  color === c.id ? "scale-110" : "opacity-60 hover:opacity-100"
+                }`}
+                style={{
+                  backgroundColor: c.hex,
+                  boxShadow: color === c.id ? `0 0 10px ${c.hex}` : undefined,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-4 border-4 border-black bg-panel p-5 shadow-[0_6px_0_0_#000]">
           <button
             onClick={startTeam}
             disabled={busy}
@@ -118,7 +153,9 @@ export default function TeamGate({ uid }: { uid: string }) {
             ♥ START OUR TEAM
           </button>
 
-          <p className="text-center font-pixel text-[8px] text-white/40">— OR —</p>
+          <p className="text-center font-pixel text-[8px] text-white/40">
+            — OR —
+          </p>
 
           <input
             value={codeInput}

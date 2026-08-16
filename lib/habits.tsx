@@ -61,10 +61,12 @@ export function calcStreak(
 export function calcCoopStreak(
   a: Record<string, DayDoc>,
   b: Record<string, DayDoc>,
-  habits: Habit[] = DEFAULT_HABITS
+  habitsA: Habit[] = DEFAULT_HABITS,
+  habitsB: Habit[] = DEFAULT_HABITS
 ): number {
   const keys = lastNDays(365).reverse();
-  const both = (k: string) => isPerfect(a[k], habits) && isPerfect(b[k], habits);
+  const both = (k: string) =>
+    isPerfect(a[k], habitsA) && isPerfect(b[k], habitsB);
   let i = 0;
   if (!both(keys[0])) i = 1;
   let streak = 0;

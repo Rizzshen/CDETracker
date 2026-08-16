@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -13,7 +13,7 @@ import {
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import {
-  HABITS,
+  DEFAULT_HABITS,
   calcCoopStreak,
   calcStreak,
   doneCount,
@@ -21,17 +21,26 @@ import {
   lastNDays,
   todayKey,
   type DayDoc,
-  type HabitId,
+  type Habit,
 } from "@/lib/habits";
-import { Px, SPRITES, SPRITE_PALETTES } from "./sprites";
+import { colorHex } from "@/lib/colors";
+import { Px, SPRITES, SPRITE_PALETTES, SPRITE_OPTIONS } from "./sprites";
 
-type Profile = { uid: string; email?: string };
+type Profile = { uid: string; email?: string; habits?: Habit[]; color?: string };
+type Couple = { code: string; members: string[] };
 
-const HABIT_SPRITE: Record<HabitId, keyof typeof SPRITES> = {
-  code: "code",
-  driving: "drive",
-  exercise: "train",
-};
+function sanitizeHabits(raw: any): Habit[] {
+  return DEFAULT_HABITS.map((d, i) => {
+    const h = raw?.[i];
+    return h?.id
+      ? {
+          id: d.id,
+          name: String(h.name || d.name).slice(0, 10),
+          sprite: String(h.sprite || d.sprite),
+        }
+      : d;
+  });
+}
 
 export default function Tracker({
   uid,
@@ -43,29 +52,37 @@ export default function Tracker({
   coupleId: string;
 }) {
   const today = todayKey();
+  const [myProfile, setMyProfile] = useState<Profile | null>(null);
   const [myDay, setMyDay] = useState<DayDoc>({});
   const [myHist, setMyHist] = useState<Record<string, DayDoc>>({});
-  const [couple, setCouple] = useState<{
-    code: string;
-    members: string[];
-  } | null>(null);
+  const [couple, setCouple] = useState<Couple | null>(null);
   const [partner, setPartner] = useState<Profile | null>(null);
   const [partnerDay, setPartnerDay] = useState<DayDoc>({});
   const [partnerHist, setPartnerHist] = useState<Record<string, DayDoc>>({});
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Habit[]>(DEFAULT_HABITS);
+  const [peek, setPeek] = useState(false);
+  const [deny, setDeny] = useState(false);
+  const denyTimer = useRef<number | null>(null);
 
-  // my team
+  useEffect(() => {
+    return onSnapshot(doc(db, "users", uid), (s) => {
+      setMyProfile((s.data() as Profile) ?? null);
+    });
+  }, [uid]);
+
   useEffect(() => {
     return onSnapshot(doc(db, "couples", coupleId), (s) => {
-      setCouple((s.data() as { code: string; members: string[] }) ?? null);
+      setCouple((s.data() as Couple) ?? null);
     });
   }, [coupleId]);
 
   const partnerUid = couple?.members.find((m) => m !== uid) ?? null;
 
-  // my player 2's profile
   useEffect(() => {
     if (!partnerUid) {
       setPartner(null);
+      setPeek(false);
       return;
     }
     return onSnapshot(doc(db, "users", partnerUid), (s) => {
@@ -73,10 +90,12 @@ export default function Tracker({
     });
   }, [partnerUid]);
 
-  // my data
+  const myHabits = useMemo(() => sanitizeHabits(myProfile?.habits), [myProfile]);
+  const herHabits = useMemo(() => sanitizeHabits(partner?.habits), [partner]);
+
   useEffect(() => {
     const u1 = onSnapshot(doc(db, "completions", `${uid}_${today}`), (s) =>
-      setMyDay((s.data() as DayDoc) ?? {}),
+      setMyDay((s.data() as DayDoc) ?? {})
     );
     const u2 = onSnapshot(
       query(collection(db, "completions"), where("userId", "==", uid)),
@@ -87,7 +106,7 @@ export default function Tracker({
           if (data.date) map[data.date] = data;
         });
         setMyHist(map);
-      },
+      }
     );
     return () => {
       u1();
@@ -95,12 +114,10 @@ export default function Tracker({
     };
   }, [uid, today]);
 
-  // partner data (live)
   useEffect(() => {
     if (!partnerUid) return;
-    const u1 = onSnapshot(
-      doc(db, "completions", `${partnerUid}_${today}`),
-      (s) => setPartnerDay((s.data() as DayDoc) ?? {}),
+    const u1 = onSnapshot(doc(db, "completions", `${partnerUid}_${today}`), (s) =>
+      setPartnerDay((s.data() as DayDoc) ?? {})
     );
     const u2 = onSnapshot(
       query(collection(db, "completions"), where("userId", "==", partnerUid)),
@@ -111,7 +128,7 @@ export default function Tracker({
           if (data.date) map[data.date] = data;
         });
         setPartnerHist(map);
-      },
+      }
     );
     return () => {
       u1();
@@ -119,7 +136,7 @@ export default function Tracker({
     };
   }, [partnerUid, today]);
 
-  async function toggle(habitId: HabitId) {
+  async function toggle(habitId: string) {
     await setDoc(
       doc(db, "completions", `${uid}_${today}`),
       {
@@ -128,22 +145,43 @@ export default function Tracker({
         [habitId]: !myDay[habitId],
         updatedAt: serverTimestamp(),
       },
-      { merge: true },
+      { merge: true }
     );
   }
 
-  const myStreak = useMemo(() => calcStreak(myHist), [myHist]);
-  const herStreak = useMemo(() => calcStreak(partnerHist), [partnerHist]);
+  function openEditor() {
+    setDraft(myHabits.map((h) => ({ ...h })));
+    setEditing(true);
+  }
+
+  async function saveEditor() {
+    await setDoc(doc(db, "users", uid), { habits: draft }, { merge: true });
+    setEditing(false);
+  }
+
+  function denyClick() {
+    setDeny(true);
+    if (denyTimer.current) window.clearTimeout(denyTimer.current);
+    denyTimer.current = window.setTimeout(() => setDeny(false), 1500);
+  }
+
+  const myStreak = useMemo(() => calcStreak(myHist, myHabits), [myHist, myHabits]);
+  const herStreak = useMemo(
+    () => calcStreak(partnerHist, herHabits),
+    [partnerHist, herHabits]
+  );
   const coopStreak = useMemo(
-    () => calcCoopStreak(myHist, partnerHist),
-    [myHist, partnerHist],
+    () => calcCoopStreak(myHist, partnerHist, myHabits, herHabits),
+    [myHist, partnerHist, myHabits, herHabits]
   );
 
   const week = lastNDays(7);
-  const myCount = doneCount(myDay);
-  const herCount = doneCount(partnerDay);
+  const myCount = doneCount(myDay, myHabits);
+  const herCount = doneCount(partnerDay, herHabits);
   const myName = (email ?? "P1").split("@")[0];
   const herName = partner ? (partner.email ?? "P2").split("@")[0] : null;
+  const myHex = colorHex(myProfile?.color, "#4de3ff");
+  const herHex = colorHex(partner?.color, "#ff5da2");
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-night font-retro text-white">
@@ -167,25 +205,82 @@ export default function Tracker({
         <section className="mt-6 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
           <PlayerCard
             name={myName}
-            hex="#4de3ff"
-            barClass="bg-p1 [box-shadow:0_0_8px_#4de3ff]"
+            hex={myHex}
             count={myCount}
             streak={myStreak}
           />
-          <div className="animate-pulse self-center font-pixel text-xs text-p2 [text-shadow:0_0_12px_#ff5da2]">
+          <div
+            className="animate-pulse self-center font-pixel text-xs"
+            style={{ color: herHex, textShadow: `0 0 12px ${herHex}` }}
+          >
             VS
           </div>
           <PlayerCard
             name={herName ?? "ADD P2"}
-            hex="#ff5da2"
-            barClass="bg-p2 [box-shadow:0_0_8px_#ff5da2]"
+            hex={herHex}
             count={herCount}
             streak={herStreak}
             waiting={!partnerUid}
+            peekOpen={peek}
+            onPeek={() => setPeek((p) => !p)}
           />
         </section>
 
-        {/* share code while solo */}
+        {peek && partner && (
+          <div className="mt-3 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]" style={{ boxShadow: `0 0 18px ${herHex}40` }}>
+            <div className="flex items-center justify-between">
+              <h3
+                className="font-pixel text-[9px]"
+                style={{ color: herHex, textShadow: `0 0 8px ${herHex}` }}
+              >
+                ► {herName}'S QUESTS
+              </h3>
+              <button
+                onClick={() => setPeek(false)}
+                className="font-pixel text-[8px] text-white/50 hover:text-white"
+              >
+                [X]
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {herHabits.map((h) => {
+                const done = !!partnerDay[h.id];
+                return (
+                  <button
+                    key={h.id}
+                    onClick={denyClick}
+                    className={`w-full border-4 border-black p-3 text-left shadow-[0_3px_0_0_#000] transition active:translate-y-1 active:shadow-none ${
+                      done ? "bg-[#3a1020]" : "bg-night"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-3">
+                        <Px
+                          rows={SPRITES[h.sprite] ?? SPRITES.code}
+                          palette={SPRITE_PALETTES[h.sprite] ?? SPRITE_PALETTES.code}
+                          className="h-6 w-6"
+                        />
+                        <span className="font-pixel text-[9px]">{h.name}</span>
+                      </span>
+                      <span className="font-pixel text-[10px]" style={{ color: done ? herHex : "rgba(255,255,255,0.3)" }}>
+                        {done ? "[✓]" : "[ ]"}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p
+              className={`mt-3 text-center font-pixel text-[8px] transition-opacity ${deny ? "opacity-100" : "opacity-0"}`}
+              style={{ color: herHex }}
+            >
+              YOU CAN'T CHECK {herName?.toUpperCase()}'S QUESTS ♥
+            </p>
+          </div>
+        )}
+
         {couple && !partnerUid && (
           <div className="mt-3 border-4 border-black bg-panel p-3 text-center shadow-[0_4px_0_0_#000]">
             <p className="font-pixel text-[8px] text-white/60">
@@ -202,82 +297,129 @@ export default function Tracker({
             coopStreak > 0 ? "[box-shadow:0_0_18px_rgba(255,93,162,0.35)]" : ""
           }`}
         >
-          <Px
-            rows={SPRITES.heart}
-            palette={{ P: "#ff5da2" }}
-            className="h-4 w-4"
-            glow="#ff5da2"
-          />
+          <Px rows={SPRITES.heart} palette={{ P: "#ff5da2" }} className="h-4 w-4" glow="#ff5da2" />
           <span className="font-pixel text-[9px] text-p2 [text-shadow:0_0_8px_rgba(255,93,162,0.8)]">
             CO-OP STREAK: {coopStreak}
           </span>
-          <Px
-            rows={SPRITES.heart}
-            palette={{ P: "#ff5da2" }}
-            className="h-4 w-4"
-            glow="#ff5da2"
-          />
+          <Px rows={SPRITES.heart} palette={{ P: "#ff5da2" }} className="h-4 w-4" glow="#ff5da2" />
         </div>
 
-        <h2 className="mt-8 font-pixel text-[10px] text-lime [text-shadow:0_0_8px_rgba(141,255,91,0.6)]">
-          ► TODAY'S QUESTS
-        </h2>
-        <div className="mt-3 space-y-3">
-          {HABITS.map((h) => {
-            const done = !!myDay[h.id];
-            const sprite = SPRITES[HABIT_SPRITE[h.id]];
-            return (
-              <button
-                key={h.id}
-                onClick={() => toggle(h.id)}
-                className={`w-full border-4 border-black p-3 text-left shadow-[0_4px_0_0_#000] transition active:translate-y-1 active:shadow-none ${
-                  done
-                    ? "bg-lime text-black [box-shadow:0_0_18px_rgba(141,255,91,0.45)]"
-                    : "bg-panel hover:bg-[#2f1c42]"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-3">
-                    <Px
-                      rows={sprite}
-                      palette={SPRITE_PALETTES[HABIT_SPRITE[h.id]]}
-                      className="h-7 w-7"
-                    />
-                    <span className="font-pixel text-[10px]">{h.name}</span>
-                  </span>
-                  <span
-                    className={`font-pixel text-[10px] ${done ? "text-black" : "text-white/50"}`}
-                  >
-                    {done ? "[✓]" : "[ ]"}
-                  </span>
+        <div className="mt-8 flex items-center justify-between">
+          <h2 className="font-pixel text-[10px] text-lime [text-shadow:0_0_8px_rgba(141,255,91,0.6)]">
+            ► MY QUESTS
+          </h2>
+          {!editing && (
+            <button
+              onClick={openEditor}
+              className="border-2 border-white/30 px-2 py-1 font-pixel text-[8px] text-white/60 hover:text-white"
+            >
+              EDIT
+            </button>
+          )}
+        </div>
+
+        {editing ? (
+          <div className="mt-3 space-y-4 border-4 border-black bg-panel p-4 shadow-[0_4px_0_0_#000]">
+            <p className="text-center font-pixel text-[8px] text-white/50">
+              ONLY YOUR QUESTS CHANGE · HERS STAY HERS
+            </p>
+            {draft.map((h, i) => (
+              <div key={h.id} className="space-y-2">
+                <input
+                  value={h.name}
+                  maxLength={10}
+                  onChange={(e) =>
+                    setDraft((d) =>
+                      d.map((x, j) =>
+                        j === i ? { ...x, name: e.target.value.toUpperCase() } : x
+                      )
+                    )
+                  }
+                  className="w-full border-4 border-black bg-night px-3 py-2 font-pixel text-[9px] text-white outline-none focus:[box-shadow:0_0_0_2px_#8dff5b]"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {SPRITE_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() =>
+                        setDraft((d) =>
+                          d.map((x, j) => (j === i ? { ...x, sprite: s } : x))
+                        )
+                      }
+                      className={`border-2 bg-night p-1 ${
+                        h.sprite === s
+                          ? "border-lime [box-shadow:0_0_8px_rgba(141,255,91,0.6)]"
+                          : "border-black"
+                      }`}
+                    >
+                      <Px
+                        rows={SPRITES[s]}
+                        palette={SPRITE_PALETTES[s]}
+                        className="h-5 w-5"
+                      />
+                    </button>
+                  ))}
                 </div>
+              </div>
+            ))}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={saveEditor}
+                className="border-4 border-black bg-lime py-3 font-pixel text-[9px] text-black shadow-[0_4px_0_0_#000] active:translate-y-1 active:shadow-none"
+              >
+                SAVE
               </button>
-            );
-          })}
-        </div>
+              <button
+                onClick={() => setEditing(false)}
+                className="border-4 border-black bg-night py-3 font-pixel text-[9px] text-white/60 shadow-[0_4px_0_0_#000] active:translate-y-1 active:shadow-none"
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {myHabits.map((h) => {
+              const done = !!myDay[h.id];
+              return (
+                <button
+                  key={h.id}
+                  onClick={() => toggle(h.id)}
+                  className={`w-full border-4 border-black p-3 text-left shadow-[0_4px_0_0_#000] transition active:translate-y-1 active:shadow-none ${
+                    done
+                      ? "bg-lime text-black [box-shadow:0_0_18px_rgba(141,255,91,0.45)]"
+                      : "bg-panel hover:bg-[#2f1c42]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-3">
+                      <Px
+                        rows={SPRITES[h.sprite] ?? SPRITES.code}
+                        palette={SPRITE_PALETTES[h.sprite] ?? SPRITE_PALETTES.code}
+                        className="h-7 w-7"
+                      />
+                      <span className="font-pixel text-[10px]">{h.name}</span>
+                    </span>
+                    <span className={`font-pixel text-[10px] ${done ? "text-black" : "text-white/50"}`}>
+                      {done ? "[✓]" : "[ ]"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        {isPerfect(myDay) && (
+        {isPerfect(myDay, myHabits) && (
           <p className="mt-5 animate-pulse text-center font-pixel text-[10px] text-coin [text-shadow:0_0_10px_rgba(255,217,61,0.8)]">
             ★ PERFECT DAY! +1 STREAK ★
           </p>
         )}
 
-        <h2 className="mt-8 font-pixel text-[10px] text-white/70">
-          ► LAST 7 DAYS
-        </h2>
+        <h2 className="mt-8 font-pixel text-[10px] text-white/70">► LAST 7 DAYS</h2>
         <div className="mt-3 space-y-1 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]">
-          <WeekRow
-            label={myName}
-            barClass="bg-p1 [box-shadow:0_0_6px_#4de3ff]"
-            week={week}
-            hist={myHist}
-          />
-          <WeekRow
-            label={herName ?? "P2"}
-            barClass="bg-p2 [box-shadow:0_0_6px_#ff5da2]"
-            week={week}
-            hist={partnerHist}
-          />
+          <WeekRow label={myName} hex={myHex} week={week} hist={myHist} habits={myHabits} />
+          <WeekRow label={herName ?? "P2"} hex={herHex} week={week} hist={partnerHist} habits={herHabits} />
         </div>
         <p className="mt-2 text-center text-xl text-white/50">
           bright = perfect · dim = partial
@@ -296,27 +438,24 @@ export default function Tracker({
 function PlayerCard({
   name,
   hex,
-  barClass,
   count,
   streak,
   waiting,
+  peekOpen,
+  onPeek,
 }: {
   name: string;
   hex: string;
-  barClass: string;
   count: number;
   streak: number;
   waiting?: boolean;
+  peekOpen?: boolean;
+  onPeek?: () => void;
 }) {
   return (
     <div className="border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]">
       <div className="flex items-center gap-2">
-        <Px
-          rows={SPRITES.heart}
-          palette={{ P: hex }}
-          className="h-5 w-5 shrink-0"
-          glow={hex}
-        />
+        <Px rows={SPRITES.heart} palette={{ P: hex }} className="h-5 w-5 shrink-0" glow={hex} />
         <p
           className="truncate font-pixel text-[9px]"
           style={{ color: hex, textShadow: `0 0 8px ${hex}` }}
@@ -330,55 +469,67 @@ function PlayerCard({
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className={`h-3 flex-1 border-2 border-black transition ${
-              i < count ? barClass : "bg-black/40"
-            }`}
+            className="h-3 flex-1 border-2 border-black transition"
+            style={
+              i < count
+                ? { backgroundColor: hex, boxShadow: `0 0 8px ${hex}` }
+                : { backgroundColor: "rgba(0,0,0,0.4)" }
+            }
           />
         ))}
       </div>
 
       <div className="mt-2 flex items-center justify-between">
         <span className="flex items-center gap-1">
-          <Px
-            rows={SPRITES.flame}
-            palette={SPRITE_PALETTES.flame}
-            className="h-4 w-4"
-          />
+          <Px rows={SPRITES.flame} palette={SPRITE_PALETTES.flame} className="h-4 w-4" />
           <span className="font-pixel text-[8px] text-coin">{streak}</span>
         </span>
-        <span className="font-pixel text-[8px] text-white/50">
-          {count * 100} PTS
-        </span>
+        <span className="font-pixel text-[8px] text-white/50">{count * 100} PTS</span>
       </div>
+
+      {onPeek && !waiting && (
+        <button
+          onClick={onPeek}
+          className="mt-2 w-full border-2 border-black bg-night py-1.5 font-pixel text-[7px] transition active:translate-y-0.5"
+          style={{ color: hex }}
+        >
+          {peekOpen ? "HIDE QUESTS" : "VIEW QUESTS"}
+        </button>
+      )}
     </div>
   );
 }
 
 function WeekRow({
   label,
-  barClass,
+  hex,
   week,
   hist,
+  habits,
 }: {
   label: string;
-  barClass: string;
+  hex: string;
   week: string[];
   hist: Record<string, DayDoc>;
+  habits: Habit[];
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-16 truncate font-pixel text-[8px] text-white/60">
-        {label}
-      </span>
+      <span className="w-16 truncate font-pixel text-[8px] text-white/60">{label}</span>
       <div className="flex flex-1 gap-1">
         {week.map((d) => {
-          const c = doneCount(hist[d]);
+          const c = doneCount(hist[d], habits);
           return (
             <div
               key={d}
-              className={`h-4 flex-1 border-2 border-black ${
-                c === 3 ? barClass : c > 0 ? "bg-white/40" : "bg-black/40"
-              }`}
+              className="h-4 flex-1 border-2 border-black"
+              style={
+                c === 3
+                  ? { backgroundColor: hex, boxShadow: `0 0 6px ${hex}` }
+                  : c > 0
+                    ? { backgroundColor: "rgba(255,255,255,0.4)" }
+                    : { backgroundColor: "rgba(0,0,0,0.4)" }
+              }
             />
           );
         })}

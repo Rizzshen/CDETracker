@@ -49,6 +49,36 @@ export const SPRITES: Record<string, string[]> = {
     "...PP...",
     "........",
   ],
+  book: [
+    "........",
+    "BB....BB",
+    "BWB..BWB",
+    "BWWBBWWB",
+    "BWWWWWWB",
+    "BWWWWWWB",
+    ".BBBBBB.",
+    "........",
+  ],
+  water: [
+    "...C....",
+    "...CC...",
+    "..CCCC..",
+    ".CCCCCC.",
+    ".CLCCCC.",
+    ".CCCCCC.",
+    "..CCCC..",
+    "........",
+  ],
+  moon: [
+    "..MMMM..",
+    ".MM.....",
+    "MM......",
+    "MM......",
+    "MM......",
+    ".MM.....",
+    "..MMMM..",
+    "........",
+  ],
 };
 
 export const SPRITE_PALETTES: Record<string, Record<string, string>> = {
@@ -56,7 +86,22 @@ export const SPRITE_PALETTES: Record<string, Record<string, string>> = {
   drive: { R: "#ff4d6d", C: "#4de3ff", Y: "#ffd93d", G: "#aab2c0" },
   train: { G: "#8dff5b" },
   flame: { O: "#ff9f43", Y: "#ffd93d" },
+  heart: { P: "#ff5da2" },
+  book: { B: "#b0713f", W: "#f2ead8" },
+  water: { C: "#4de3ff", L: "#d8f8ff" },
+  moon: { M: "#ffd93d" },
 };
+
+export const SPRITE_OPTIONS = [
+  "code",
+  "drive",
+  "train",
+  "book",
+  "water",
+  "moon",
+  "flame",
+  "heart",
+];
 
 export function Px({
   rows,
@@ -65,10 +110,11 @@ export function Px({
   glow,
 }: {
   rows: string[];
-  palette: Record<string, string>;
+  palette?: Record<string, string>;
   className?: string;
   glow?: string;
 }) {
+  const colors = palette ?? {};
   return (
     <svg
       viewBox="0 0 8 8"
@@ -77,20 +123,20 @@ export function Px({
       style={glow ? { filter: `drop-shadow(0 0 5px ${glow})` } : undefined}
     >
       {rows.flatMap((row, y) =>
-        row
-          .split("")
-          .map((ch, x) =>
-            ch === "." ? null : (
-              <rect
-                key={`${x}-${y}`}
-                x={x}
-                y={y}
-                width={1}
-                height={1}
-                fill={palette[ch]}
-              />
-            )
-          )
+        row.split("").map((ch, x) => {
+          const fill = colors[ch];
+          if (ch === "." || !fill) return null;
+          return (
+            <rect
+              key={`${x}-${y}`}
+              x={x}
+              y={y}
+              width={1}
+              height={1}
+              fill={fill}
+            />
+          );
+        }),
       )}
     </svg>
   );
