@@ -25,6 +25,7 @@ import {
 } from "@/lib/habits";
 import { colorHex } from "@/lib/colors";
 import { getNews } from "@/lib/roasts";
+import { playPerfectDayChime } from "@/lib/sound";
 import { Px, SPRITES, SPRITE_PALETTES, SPRITE_OPTIONS } from "./sprites";
 
 type Profile = {
@@ -101,6 +102,16 @@ export default function Tracker({
     [myProfile],
   );
   const herHabits = useMemo(() => sanitizeHabits(partner?.habits), [partner]);
+
+  const myPerfectToday = isPerfect(myDay, myHabits);
+  const wasPerfectRef = useRef(myPerfectToday);
+
+  useEffect(() => {
+    if (myPerfectToday && !wasPerfectRef.current) {
+      playPerfectDayChime();
+    }
+    wasPerfectRef.current = myPerfectToday;
+  }, [myPerfectToday]);
 
   useEffect(() => {
     const u1 = onSnapshot(doc(db, "completions", `${uid}_${today}`), (s) =>
@@ -485,7 +496,7 @@ export default function Tracker({
           </div>
         )}
 
-        {isPerfect(myDay, myHabits) && (
+        {myPerfectToday && (
           <p className="mt-5 animate-pulse text-center font-pixel text-[10px] text-coin [text-shadow:0_0_10px_rgba(255,217,61,0.8)]">
             ★ PERFECT DAY! +1 STREAK ★
           </p>
