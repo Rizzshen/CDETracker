@@ -11,6 +11,19 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+// 🚨 SAFETY CHECK: If this prints, your .env.local file is not being read
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.error("❌ Firebase config is missing!");
+  console.log("Did you restart the server after creating .env.local?");
+  console.log("Current API Key:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+  console.log(
+    "Current Project ID:",
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  );
+  // We throw an error here so the app stops immediately and shows the real issue
+  throw new Error("Firebase environment variables are missing.");
+}
+
 export const app =
   getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
 
