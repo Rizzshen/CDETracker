@@ -1,6 +1,5 @@
 import {
   isPerfect,
-  lastNDays,
   todayKey,
   type DayDoc,
   type Habit,
@@ -44,15 +43,26 @@ export type News = {
 export function getNews(
   hist: Record<string, DayDoc>,
   habits: Habit[],
-  who: "me" | "them"
+  who: "me" | "them",
 ): News {
-  const yesterday = lastNDays(3)[1];
-  const hasHistory = Object.keys(hist).length > 0;
-  const missed = hasHistory && !isPerfect(hist[yesterday], habits);
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = todayKey(yesterdayDate);
+
+  const dayBeforeYesterdayDate = new Date();
+  dayBeforeYesterdayDate.setDate(dayBeforeYesterdayDate.getDate() - 2);
+  const dayBeforeYesterday = todayKey(dayBeforeYesterdayDate);
+
+  // Only show news if user has been around for 2+ days
+  const hasHistoryBeforeYesterday =
+    hist[dayBeforeYesterday] ||
+    Object.keys(hist).some((d) => d < dayBeforeYesterday);
+
+  const missed =
+    hasHistoryBeforeYesterday && !isPerfect(hist[yesterday], habits);
 
   let funeral: News["funeral"] = null;
   if (missed) {
-    // how long was the streak that just died?
     let len = 0;
     const d = new Date();
     d.setDate(d.getDate() - 2);
