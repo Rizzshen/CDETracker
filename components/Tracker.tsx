@@ -26,7 +26,12 @@ import {
 import { colorHex } from "@/lib/colors";
 import { Px, SPRITES, SPRITE_PALETTES, SPRITE_OPTIONS } from "./sprites";
 
-type Profile = { uid: string; email?: string; habits?: Habit[]; color?: string };
+type Profile = {
+  uid: string;
+  email?: string;
+  habits?: Habit[];
+  color?: string;
+};
 type Couple = { code: string; members: string[] };
 
 function sanitizeHabits(raw: any): Habit[] {
@@ -90,12 +95,15 @@ export default function Tracker({
     });
   }, [partnerUid]);
 
-  const myHabits = useMemo(() => sanitizeHabits(myProfile?.habits), [myProfile]);
+  const myHabits = useMemo(
+    () => sanitizeHabits(myProfile?.habits),
+    [myProfile],
+  );
   const herHabits = useMemo(() => sanitizeHabits(partner?.habits), [partner]);
 
   useEffect(() => {
     const u1 = onSnapshot(doc(db, "completions", `${uid}_${today}`), (s) =>
-      setMyDay((s.data() as DayDoc) ?? {})
+      setMyDay((s.data() as DayDoc) ?? {}),
     );
     const u2 = onSnapshot(
       query(collection(db, "completions"), where("userId", "==", uid)),
@@ -106,7 +114,7 @@ export default function Tracker({
           if (data.date) map[data.date] = data;
         });
         setMyHist(map);
-      }
+      },
     );
     return () => {
       u1();
@@ -116,8 +124,9 @@ export default function Tracker({
 
   useEffect(() => {
     if (!partnerUid) return;
-    const u1 = onSnapshot(doc(db, "completions", `${partnerUid}_${today}`), (s) =>
-      setPartnerDay((s.data() as DayDoc) ?? {})
+    const u1 = onSnapshot(
+      doc(db, "completions", `${partnerUid}_${today}`),
+      (s) => setPartnerDay((s.data() as DayDoc) ?? {}),
     );
     const u2 = onSnapshot(
       query(collection(db, "completions"), where("userId", "==", partnerUid)),
@@ -128,7 +137,7 @@ export default function Tracker({
           if (data.date) map[data.date] = data;
         });
         setPartnerHist(map);
-      }
+      },
     );
     return () => {
       u1();
@@ -145,7 +154,7 @@ export default function Tracker({
         [habitId]: !myDay[habitId],
         updatedAt: serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
   }
 
@@ -165,14 +174,17 @@ export default function Tracker({
     denyTimer.current = window.setTimeout(() => setDeny(false), 1500);
   }
 
-  const myStreak = useMemo(() => calcStreak(myHist, myHabits), [myHist, myHabits]);
+  const myStreak = useMemo(
+    () => calcStreak(myHist, myHabits),
+    [myHist, myHabits],
+  );
   const herStreak = useMemo(
     () => calcStreak(partnerHist, herHabits),
-    [partnerHist, herHabits]
+    [partnerHist, herHabits],
   );
   const coopStreak = useMemo(
     () => calcCoopStreak(myHist, partnerHist, myHabits, herHabits),
-    [myHist, partnerHist, myHabits, herHabits]
+    [myHist, partnerHist, myHabits, herHabits],
   );
 
   const week = lastNDays(7);
@@ -227,7 +239,10 @@ export default function Tracker({
         </section>
 
         {peek && partner && (
-          <div className="mt-3 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]" style={{ boxShadow: `0 0 18px ${herHex}40` }}>
+          <div
+            className="mt-3 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]"
+            style={{ boxShadow: `0 0 18px ${herHex}40` }}
+          >
             <div className="flex items-center justify-between">
               <h3
                 className="font-pixel text-[9px]"
@@ -258,12 +273,19 @@ export default function Tracker({
                       <span className="flex items-center gap-3">
                         <Px
                           rows={SPRITES[h.sprite] ?? SPRITES.code}
-                          palette={SPRITE_PALETTES[h.sprite] ?? SPRITE_PALETTES.code}
+                          palette={
+                            SPRITE_PALETTES[h.sprite] ?? SPRITE_PALETTES.code
+                          }
                           className="h-6 w-6"
                         />
                         <span className="font-pixel text-[9px]">{h.name}</span>
                       </span>
-                      <span className="font-pixel text-[10px]" style={{ color: done ? herHex : "rgba(255,255,255,0.3)" }}>
+                      <span
+                        className="font-pixel text-[10px]"
+                        style={{
+                          color: done ? herHex : "rgba(255,255,255,0.3)",
+                        }}
+                      >
                         {done ? "[✓]" : "[ ]"}
                       </span>
                     </div>
@@ -297,11 +319,21 @@ export default function Tracker({
             coopStreak > 0 ? "[box-shadow:0_0_18px_rgba(255,93,162,0.35)]" : ""
           }`}
         >
-          <Px rows={SPRITES.heart} palette={{ P: "#ff5da2" }} className="h-4 w-4" glow="#ff5da2" />
+          <Px
+            rows={SPRITES.heart}
+            palette={{ P: "#ff5da2" }}
+            className="h-4 w-4"
+            glow="#ff5da2"
+          />
           <span className="font-pixel text-[9px] text-p2 [text-shadow:0_0_8px_rgba(255,93,162,0.8)]">
             CO-OP STREAK: {coopStreak}
           </span>
-          <Px rows={SPRITES.heart} palette={{ P: "#ff5da2" }} className="h-4 w-4" glow="#ff5da2" />
+          <Px
+            rows={SPRITES.heart}
+            palette={{ P: "#ff5da2" }}
+            className="h-4 w-4"
+            glow="#ff5da2"
+          />
         </div>
 
         <div className="mt-8 flex items-center justify-between">
@@ -331,8 +363,10 @@ export default function Tracker({
                   onChange={(e) =>
                     setDraft((d) =>
                       d.map((x, j) =>
-                        j === i ? { ...x, name: e.target.value.toUpperCase() } : x
-                      )
+                        j === i
+                          ? { ...x, name: e.target.value.toUpperCase() }
+                          : x,
+                      ),
                     )
                   }
                   className="w-full border-4 border-black bg-night px-3 py-2 font-pixel text-[9px] text-white outline-none focus:[box-shadow:0_0_0_2px_#8dff5b]"
@@ -343,7 +377,7 @@ export default function Tracker({
                       key={s}
                       onClick={() =>
                         setDraft((d) =>
-                          d.map((x, j) => (j === i ? { ...x, sprite: s } : x))
+                          d.map((x, j) => (j === i ? { ...x, sprite: s } : x)),
                         )
                       }
                       className={`border-2 bg-night p-1 ${
@@ -395,12 +429,16 @@ export default function Tracker({
                     <span className="flex items-center gap-3">
                       <Px
                         rows={SPRITES[h.sprite] ?? SPRITES.code}
-                        palette={SPRITE_PALETTES[h.sprite] ?? SPRITE_PALETTES.code}
+                        palette={
+                          SPRITE_PALETTES[h.sprite] ?? SPRITE_PALETTES.code
+                        }
                         className="h-7 w-7"
                       />
                       <span className="font-pixel text-[10px]">{h.name}</span>
                     </span>
-                    <span className={`font-pixel text-[10px] ${done ? "text-black" : "text-white/50"}`}>
+                    <span
+                      className={`font-pixel text-[10px] ${done ? "text-black" : "text-white/50"}`}
+                    >
                       {done ? "[✓]" : "[ ]"}
                     </span>
                   </div>
@@ -416,10 +454,24 @@ export default function Tracker({
           </p>
         )}
 
-        <h2 className="mt-8 font-pixel text-[10px] text-white/70">► LAST 7 DAYS</h2>
+        <h2 className="mt-8 font-pixel text-[10px] text-white/70">
+          ► LAST 7 DAYS
+        </h2>
         <div className="mt-3 space-y-1 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]">
-          <WeekRow label={myName} hex={myHex} week={week} hist={myHist} habits={myHabits} />
-          <WeekRow label={herName ?? "P2"} hex={herHex} week={week} hist={partnerHist} habits={herHabits} />
+          <WeekRow
+            label={myName}
+            hex={myHex}
+            week={week}
+            hist={myHist}
+            habits={myHabits}
+          />
+          <WeekRow
+            label={herName ?? "P2"}
+            hex={herHex}
+            week={week}
+            hist={partnerHist}
+            habits={herHabits}
+          />
         </div>
         <p className="mt-2 text-center text-xl text-white/50">
           bright = perfect · dim = partial
@@ -428,7 +480,7 @@ export default function Tracker({
         <p className="mt-8 text-center font-pixel text-[8px] leading-relaxed text-white/40">
           MADE WITH <span className="text-p2">♥</span> FOR US
           <br />
-          SEASON 1 · INSERT LOVE TO CONTINUE
+          Bibuji♥
         </p>
       </div>
     </main>
@@ -455,7 +507,12 @@ function PlayerCard({
   return (
     <div className="border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]">
       <div className="flex items-center gap-2">
-        <Px rows={SPRITES.heart} palette={{ P: hex }} className="h-5 w-5 shrink-0" glow={hex} />
+        <Px
+          rows={SPRITES.heart}
+          palette={{ P: hex }}
+          className="h-5 w-5 shrink-0"
+          glow={hex}
+        />
         <p
           className="truncate font-pixel text-[9px]"
           style={{ color: hex, textShadow: `0 0 8px ${hex}` }}
@@ -481,10 +538,16 @@ function PlayerCard({
 
       <div className="mt-2 flex items-center justify-between">
         <span className="flex items-center gap-1">
-          <Px rows={SPRITES.flame} palette={SPRITE_PALETTES.flame} className="h-4 w-4" />
+          <Px
+            rows={SPRITES.flame}
+            palette={SPRITE_PALETTES.flame}
+            className="h-4 w-4"
+          />
           <span className="font-pixel text-[8px] text-coin">{streak}</span>
         </span>
-        <span className="font-pixel text-[8px] text-white/50">{count * 100} PTS</span>
+        <span className="font-pixel text-[8px] text-white/50">
+          {count * 100} PTS
+        </span>
       </div>
 
       {onPeek && !waiting && (
@@ -515,7 +578,9 @@ function WeekRow({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-16 truncate font-pixel text-[8px] text-white/60">{label}</span>
+      <span className="w-16 truncate font-pixel text-[8px] text-white/60">
+        {label}
+      </span>
       <div className="flex flex-1 gap-1">
         {week.map((d) => {
           const c = doneCount(hist[d], habits);

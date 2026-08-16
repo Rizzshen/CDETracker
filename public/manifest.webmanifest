@@ -1,0 +1,23 @@
+{
+  "name": "CDE Quest",
+  "short_name": "CDE Quest",
+  "description": "A co-op habit quest for two players.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#150b20",
+  "theme_color": "#150b20",
+  "icons": [
+    {
+      "src": "/api/icon?size=192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/icon?size=512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
