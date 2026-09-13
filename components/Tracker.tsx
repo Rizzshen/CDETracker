@@ -16,9 +16,11 @@ import {
   DEFAULT_HABITS,
   calcCoopStreak,
   calcStreak,
+  calcWeeklyPoints,
   doneCount,
+  getCurrentWeekDates,
+  getPreviousWeekDates,
   isPerfect,
-  lastNDays,
   todayKey,
   type DayDoc,
   type Habit,
@@ -199,13 +201,54 @@ export default function Tracker({
     [myHist, partnerHist, myHabits, herHabits],
   );
 
-  const week = lastNDays(7);
+  // 🆕 Weekly Logic
+  const currentWeek = useMemo(() => getCurrentWeekDates(), []);
+  const previousWeek = useMemo(() => getPreviousWeekDates(), []);
+
+  const myCurrPoints = useMemo(
+    () => calcWeeklyPoints(myHist, myHabits, currentWeek),
+    [myHist, myHabits, currentWeek],
+  );
+  const herCurrPoints = useMemo(
+    () => calcWeeklyPoints(partnerHist, herHabits, currentWeek),
+    [partnerHist, herHabits, currentWeek],
+  );
+
+  const myPrevPoints = useMemo(
+    () => calcWeeklyPoints(myHist, myHabits, previousWeek),
+    [myHist, myHabits, previousWeek],
+  );
+  const herPrevPoints = useMemo(
+    () => calcWeeklyPoints(partnerHist, herHabits, previousWeek),
+    [partnerHist, herHabits, previousWeek],
+  );
+
+  // Determine previous week winner (gets trophy all week)
+  const prevWinner =
+    myPrevPoints > herPrevPoints
+      ? "me"
+      : herPrevPoints > myPrevPoints
+        ? "her"
+        : myPrevPoints > 0
+          ? "tie"
+          : "none";
+
+  // Determine current week leader
+  const currLeader =
+    myCurrPoints > herCurrPoints
+      ? "me"
+      : herCurrPoints > myCurrPoints
+        ? "her"
+        : "tie";
+
+  const week = currentWeek; // Keep variable name for WeekRow compatibility
   const myCount = doneCount(myDay, myHabits);
   const herCount = doneCount(partnerDay, herHabits);
   const myName = (email ?? "P1").split("@")[0];
   const herName = partner ? (partner.email ?? "P2").split("@")[0] : null;
   const myHex = colorHex(myProfile?.color, "#4de3ff");
   const herHex = colorHex(partner?.color, "#ff5da2");
+
   const myNews = useMemo(
     () => getNews(myHist, myHabits, "me"),
     [myHist, myHabits],
@@ -240,6 +283,9 @@ export default function Tracker({
             hex={myHex}
             count={myCount}
             streak={myStreak}
+            weeklyPoints={myCurrPoints}
+            isPrevWinner={prevWinner === "me" || prevWinner === "tie"}
+            isCurrLeader={currLeader === "me"}
             news={myNews}
           />
           <div
@@ -253,6 +299,9 @@ export default function Tracker({
             hex={herHex}
             count={herCount}
             streak={herStreak}
+            weeklyPoints={herCurrPoints}
+            isPrevWinner={prevWinner === "her" || prevWinner === "tie"}
+            isCurrLeader={currLeader === "her"}
             waiting={!partnerUid}
             peekOpen={peek}
             onPeek={() => setPeek((p) => !p)}
@@ -260,6 +309,7 @@ export default function Tracker({
           />
         </section>
 
+        {/* ... [Keep the peek, couple code, co-op streak, and overnight news sections exactly as they were] ... */}
         {peek && partner && (
           <div
             className="mt-3 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]"
@@ -284,7 +334,6 @@ export default function Tracker({
                 </p>
               )}
             </div>
-
             <div className="mt-3 space-y-2">
               {herHabits.map((h) => {
                 const done = !!partnerDay[h.id];
@@ -292,9 +341,7 @@ export default function Tracker({
                   <button
                     key={h.id}
                     onClick={denyClick}
-                    className={`w-full border-4 border-black p-3 text-left shadow-[0_3px_0_0_#000] transition active:translate-y-1 active:shadow-none ${
-                      done ? "bg-[#3a1020]" : "bg-night"
-                    }`}
+                    className={`w-full border-4 border-black p-3 text-left shadow-[0_3px_0_0_#000] transition active:translate-y-1 active:shadow-none ${done ? "bg-[#3a1020]" : "bg-night"}`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-3">
@@ -320,7 +367,6 @@ export default function Tracker({
                 );
               })}
             </div>
-
             <p
               className={`mt-3 text-center font-pixel text-[8px] transition-opacity ${deny ? "opacity-100" : "opacity-0"}`}
               style={{ color: herHex }}
@@ -342,9 +388,7 @@ export default function Tracker({
         )}
 
         <div
-          className={`mt-3 flex items-center justify-center gap-2 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000] ${
-            coopStreak > 0 ? "[box-shadow:0_0_18px_rgba(255,93,162,0.35)]" : ""
-          }`}
+          className={`mt-3 flex items-center justify-center gap-2 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000] ${coopStreak > 0 ? "[box-shadow:0_0_18px_rgba(255,93,162,0.35)]" : ""}`}
         >
           <Px
             rows={SPRITES.heart}
@@ -362,6 +406,7 @@ export default function Tracker({
             glow="#ff5da2"
           />
         </div>
+
         {(myNews.missed || (partner && herNews.missed)) && (
           <div className="mt-6 space-y-2">
             <h2 className="font-pixel text-[10px] text-coin [text-shadow:0_0_8px_rgba(255,217,61,0.6)]">
@@ -428,11 +473,7 @@ export default function Tracker({
                           d.map((x, j) => (j === i ? { ...x, sprite: s } : x)),
                         )
                       }
-                      className={`border-2 bg-night p-1 ${
-                        h.sprite === s
-                          ? "border-lime [box-shadow:0_0_8px_rgba(141,255,91,0.6)]"
-                          : "border-black"
-                      }`}
+                      className={`border-2 bg-night p-1 ${h.sprite === s ? "border-lime [box-shadow:0_0_8px_rgba(141,255,91,0.6)]" : "border-black"}`}
                     >
                       <Px
                         rows={SPRITES[s]}
@@ -467,11 +508,7 @@ export default function Tracker({
                 <button
                   key={h.id}
                   onClick={() => toggle(h.id)}
-                  className={`w-full border-4 border-black p-3 text-left shadow-[0_4px_0_0_#000] transition active:translate-y-1 active:shadow-none ${
-                    done
-                      ? "bg-lime text-black [box-shadow:0_0_18px_rgba(141,255,91,0.45)]"
-                      : "bg-panel hover:bg-[#2f1c42]"
-                  }`}
+                  className={`w-full border-4 border-black p-3 text-left shadow-[0_4px_0_0_#000] transition active:translate-y-1 active:shadow-none ${done ? "bg-lime text-black [box-shadow:0_0_18px_rgba(141,255,91,0.45)]" : "bg-panel hover:bg-[#2f1c42]"}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-3">
@@ -498,14 +535,15 @@ export default function Tracker({
 
         {myPerfectToday && (
           <p className="mt-5 animate-pulse text-center font-pixel text-[10px] text-coin [text-shadow:0_0_10px_rgba(255,217,61,0.8)]">
-            ★ PERFECT DAY! +1 STREAK ★
+            ★ PERFECT DAY! +100 PTS ★
           </p>
         )}
 
+        {/* 🆕 UPDATED WEEKLY VIEW */}
         <h2 className="mt-8 font-pixel text-[10px] text-white/70">
-          ► LAST 7 DAYS
+          ► THIS WEEK (SUN - SAT)
         </h2>
-        <div className="mt-3 space-y-1 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]">
+        <div className="mt-3 space-y-3 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]">
           <WeekRow
             label={myName}
             hex={myHex}
@@ -521,8 +559,8 @@ export default function Tracker({
             habits={herHabits}
           />
         </div>
-        <p className="mt-2 text-center text-xl text-white/50">
-          bright = perfect · dim = partial
+        <p className="mt-2 text-center font-pixel text-[7px] text-white/40">
+          bright = perfect (3/3) · medium = partial (2/3) · dim = started (1/3)
         </p>
 
         <p className="mt-8 text-center font-pixel text-[8px] leading-relaxed text-white/40">
@@ -535,45 +573,16 @@ export default function Tracker({
   );
 }
 
-function NewsCard({
-  title,
-  roast,
-  funeral,
-}: {
-  title: string;
-  roast: string;
-  funeral: { length: number; cause: string } | null;
-}) {
-  return (
-    <div className="border-4 border-black bg-[#2a1020] p-3 shadow-[0_4px_0_0_#000]">
-      <div className="flex items-center gap-3">
-        <Px
-          rows={SPRITES.grave}
-          palette={SPRITE_PALETTES.grave}
-          className="h-8 w-8 shrink-0"
-        />
-        <div className="min-w-0">
-          <p className="font-pixel text-[8px] text-coin">{title}</p>
-          <p className="mt-1 font-retro text-lg leading-none text-white/70">
-            {roast}
-          </p>
-          {funeral && (
-            <p className="mt-2 font-pixel text-[8px] leading-relaxed text-white/50">
-              HERE LIES A {funeral.length} DAY STREAK
-              <br />
-              CAUSE: {funeral.cause}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// 🆕 Updated PlayerCard with Trophy and Leader indicators
+// 🆕 Updated PlayerCard with Trophy and Leader indicators
 function PlayerCard({
   name,
   hex,
   count,
   streak,
+  weeklyPoints,
+  isPrevWinner,
+  isCurrLeader,
   waiting,
   peekOpen,
   onPeek,
@@ -583,13 +592,26 @@ function PlayerCard({
   hex: string;
   count: number;
   streak: number;
+  weeklyPoints: number;
+  isPrevWinner: boolean;
+  isCurrLeader: boolean;
   waiting?: boolean;
   peekOpen?: boolean;
   onPeek?: () => void;
   news?: any;
 }) {
   return (
-    <div className="border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]">
+    <div className="relative border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]">
+      {/* Trophy Badge for Previous Week Winner */}
+      {isPrevWinner && (
+        <div
+          className="absolute -top-3 -right-3 animate-bounce font-pixel text-xl [text-shadow:0_0_8px_rgba(255,217,61,0.8)]"
+          title="Last Week's Champion"
+        >
+          🏆
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
         <Px
           rows={SPRITES.heart}
@@ -644,9 +666,16 @@ function PlayerCard({
             </>
           )}
         </span>
-        <span className="font-pixel text-[8px] text-white/50">
-          {count * 100} PTS
-        </span>
+        <div className="flex flex-col items-end">
+          <span className="font-pixel text-[8px] text-coin">
+            {weeklyPoints} PTS
+          </span>
+          {isCurrLeader && !waiting && (
+            <span className="font-pixel text-[6px] text-lime animate-pulse">
+              ⚡ LEADING
+            </span>
+          )}
+        </div>
       </div>
 
       {onPeek && !waiting && (
@@ -658,6 +687,41 @@ function PlayerCard({
           {peekOpen ? "HIDE QUESTS" : "VIEW QUESTS"}
         </button>
       )}
+    </div>
+  );
+}
+
+function NewsCard({
+  title,
+  roast,
+  funeral,
+}: {
+  title: string;
+  roast: string;
+  funeral: { length: number; cause: string } | null;
+}) {
+  return (
+    <div className="border-4 border-black bg-[#2a1020] p-3 shadow-[0_4px_0_0_#000]">
+      <div className="flex items-center gap-3">
+        <Px
+          rows={SPRITES.grave}
+          palette={SPRITE_PALETTES.grave}
+          className="h-8 w-8 shrink-0"
+        />
+        <div className="min-w-0">
+          <p className="font-pixel text-[8px] text-coin">{title}</p>
+          <p className="mt-1 font-retro text-lg leading-none text-white/70">
+            {roast}
+          </p>
+          {funeral && (
+            <p className="mt-2 font-pixel text-[8px] leading-relaxed text-white/50">
+              HERE LIES A {funeral.length} DAY STREAK
+              <br />
+              CAUSE: {funeral.cause}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -683,18 +747,31 @@ function WeekRow({
       <div className="flex flex-1 gap-1">
         {week.map((d) => {
           const c = doneCount(hist[d], habits);
+          
+          // Calculate fill width (33% for 1/3, 66% for 2/3, 100% for 3/3)
+          // If you prefer your exact 25/60/100 request, change these to "25%", "60%", "100%"
+          let width = "0%";
+          if (c === 1) width = "33%";
+          if (c === 2) width = "66%";
+          if (c === 3) width = "100%";
+
           return (
             <div
               key={d}
-              className="h-4 flex-1 border-2 border-black"
-              style={
-                c === 3
-                  ? { backgroundColor: hex, boxShadow: `0 0 6px ${hex}` }
-                  : c > 0
-                    ? { backgroundColor: "rgba(255,255,255,0.4)" }
-                    : { backgroundColor: "rgba(0,0,0,0.4)" }
-              }
-            />
+              className="relative h-4 flex-1 border-2 border-black bg-[rgba(0,0,0,0.4)] overflow-hidden"
+              title={`${c}/3 tasks completed`}
+            >
+              {/* The colored fill bar */}
+              <div
+                className="absolute left-0 top-0 h-full transition-all duration-300"
+                style={{
+                  width: width,
+                  backgroundColor: hex,
+                  // Only add the glow when it's 100% full (perfect day)
+                  boxShadow: c === 3 ? `0 0 6px ${hex}` : "none",
+                }}
+              />
+            </div>
           );
         })}
       </div>
