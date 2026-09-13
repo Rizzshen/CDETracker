@@ -1,4 +1,5 @@
 "use client";
+import { HamburgerMenu } from "@/components/HamburgerMenu";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -72,6 +73,7 @@ export default function Tracker({
   const [draft, setDraft] = useState<Habit[]>(DEFAULT_HABITS);
   const [peek, setPeek] = useState(false);
   const [deny, setDeny] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const denyTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -266,9 +268,18 @@ export default function Tracker({
 
       <div className="relative z-10 mx-auto w-full max-w-sm px-4 pb-12 pt-6">
         <header className="flex items-center justify-between">
+          {/* 🍔 Hamburger Button */}
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="border-2 border-white/30 px-2 py-1 font-pixel text-[8px] text-white/60 hover:text-white hover:border-lime"
+          >
+            ☰ MENU
+          </button>
+
           <h1 className="font-pixel text-base text-coin [text-shadow:0_0_12px_rgba(255,217,61,0.7)]">
             CDE QUEST
           </h1>
+
           <button
             onClick={() => signOut(auth)}
             className="border-2 border-white/30 px-2 py-1 font-pixel text-[8px] text-white/60 hover:text-white"
@@ -276,7 +287,6 @@ export default function Tracker({
             EXIT
           </button>
         </header>
-
         <section className="mt-6 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
           <PlayerCard
             name={myName}
@@ -569,6 +579,15 @@ export default function Tracker({
           Bibuji♥
         </p>
       </div>
+      {/* 🍔 Hamburger Menu */}
+      <HamburgerMenu
+        isOpen={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        myName={myName}
+        herName={herName}
+        myPrevPoints={myPrevPoints}
+        herPrevPoints={herPrevPoints}
+      />
     </main>
   );
 }
@@ -747,7 +766,7 @@ function WeekRow({
       <div className="flex flex-1 gap-1">
         {week.map((d) => {
           const c = doneCount(hist[d], habits);
-          
+
           // Calculate fill width (33% for 1/3, 66% for 2/3, 100% for 3/3)
           // If you prefer your exact 25/60/100 request, change these to "25%", "60%", "100%"
           let width = "0%";
