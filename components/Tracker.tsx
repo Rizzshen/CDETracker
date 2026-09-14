@@ -1,6 +1,6 @@
 "use client";
-import { HamburgerMenu } from "@/components/HamburgerMenu";
 
+import { HamburgerMenu } from "@/components/HamburgerMenu";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
@@ -11,6 +11,7 @@ import {
   setDoc,
   where,
   deleteField,
+  getDoc, // ✅ Added import
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
@@ -37,6 +38,7 @@ type Profile = {
   email?: string;
   habits?: Habit[];
   color?: string;
+  fcmToken?: string; // ✅ Added for notifications
 };
 type Couple = { code: string; members: string[] };
 
@@ -75,9 +77,11 @@ export default function Tracker({
   const [peek, setPeek] = useState(false);
   const [deny, setDeny] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const denyTimer = useRef<number | null>(null);
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [pokeMessage, setPokeMessage] = useState<string | null>(null);
+  const [isPoking, setIsPoking] = useState(false); // ✅ For loading state
+
+  const denyTimer = useRef<number | null>(null);
 
   useEffect(() => {
     return onSnapshot(doc(db, "users", uid), (s) => {
@@ -117,14 +121,11 @@ export default function Tracker({
       return;
     }
     return onSnapshot(doc(db, "users", partnerUid), (s) => {
-      setPartner((s.data() as Profile) ?? null); // Keep it simple, no poke logic here
+      setPartner((s.data() as Profile) ?? null);
     });
   }, [partnerUid]);
 
-  const myHabits = useMemo(
-    () => sanitizeHabits(myProfile?.habits),
-    [myProfile],
-  );
+  const myHabits = useMemo(() => sanitizeHabits(myProfile?.habits), [myProfile]);
   const herHabits = useMemo(() => sanitizeHabits(partner?.habits), [partner]);
 
   const myPerfectToday = isPerfect(myDay, myHabits);
@@ -203,20 +204,47 @@ export default function Tracker({
       }
     }
   }
-  async function pokePartner() {
-    if (!partnerUid) return;
 
-    // Update partner's user doc with the poke data
-    await setDoc(
-      doc(db, "users", partnerUid),
-      {
-        pokedBy: myName,
-        pokeTime: serverTimestamp(),
-      },
-      { merge: true },
-    );
+  // 🆕 Handle poke with notification
+  async function handlePoke() {
+    if (!partnerUid || isPoking) return;
 
-    setShowFinishModal(false);
+    setIsPoking(true);
+
+    try {
+      // 1. Update Firestore with poke data
+      await setDoc(
+        doc(db, "users", partnerUid),
+        {
+          pokedBy: myName,
+          pokeTime: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      // 2. Get partner's FCM token from Firestore
+      const partnerDoc = await getDoc(doc(db, "users", partnerUid));
+      const partnerToken = partnerDoc.data()?.fcmToken;
+
+      // 3. Send notification via Vercel API (if token exists)
+      if (partnerToken) {
+        await fetch("/api/poke-notification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userToken: partnerToken,
+            initiatorName: myName,
+          }),
+        });
+        console.log("✅ Poke notification sent");
+      }
+    } catch (error) {
+      console.error("❌ Failed to send poke:", error);
+      // Optional: show error toast to user
+    } finally {
+      setIsPoking(false);
+      setShowFinishModal(false);
+    }
   }
 
   function openEditor() {
@@ -235,10 +263,7 @@ export default function Tracker({
     denyTimer.current = window.setTimeout(() => setDeny(false), 1500);
   }
 
-  const myStreak = useMemo(
-    () => calcStreak(myHist, myHabits),
-    [myHist, myHabits],
-  );
+  const myStreak = useMemo(() => calcStreak(myHist, myHabits), [myHist, myHabits]);
   const herStreak = useMemo(
     () => calcStreak(partnerHist, herHabits),
     [partnerHist, herHabits],
@@ -275,20 +300,20 @@ export default function Tracker({
     myPrevPoints > herPrevPoints
       ? "me"
       : herPrevPoints > myPrevPoints
-        ? "her"
-        : myPrevPoints > 0
-          ? "tie"
-          : "none";
+      ? "her"
+      : myPrevPoints > 0
+      ? "tie"
+      : "none";
 
   // Determine current week leader
   const currLeader =
     myCurrPoints > herCurrPoints
       ? "me"
       : herCurrPoints > myCurrPoints
-        ? "her"
-        : "tie";
+      ? "her"
+      : "tie";
 
-  const week = currentWeek; // Keep variable name for WeekRow compatibility
+  const week = currentWeek;
   const myCount = doneCount(myDay, myHabits);
   const herCount = doneCount(partnerDay, herHabits);
   const myName = (email ?? "P1").split("@")[0];
@@ -296,10 +321,7 @@ export default function Tracker({
   const myHex = colorHex(myProfile?.color, "#4de3ff");
   const herHex = colorHex(partner?.color, "#ff5da2");
 
-  const myNews = useMemo(
-    () => getNews(myHist, myHabits, "me"),
-    [myHist, myHabits],
-  );
+  const myNews = useMemo(() => getNews(myHist, myHabits, "me"), [myHist, myHabits]);
   const herNews = useMemo(
     () => getNews(partnerHist, herHabits, "them"),
     [partnerHist, herHabits],
@@ -334,6 +356,7 @@ export default function Tracker({
             EXIT
           </button>
         </header>
+
         <section className="mt-6 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
           <PlayerCard
             name={myName}
@@ -366,7 +389,6 @@ export default function Tracker({
           />
         </section>
 
-        {/* ... [Keep the peek, couple code, co-op streak, and overnight news sections exactly as they were] ... */}
         {peek && partner && (
           <div
             className="mt-3 border-4 border-black bg-panel p-3 shadow-[0_4px_0_0_#000]"
@@ -596,7 +618,7 @@ export default function Tracker({
           </p>
         )}
 
-        {/* 🆕 UPDATED WEEKLY VIEW */}
+        {/* 🆕 WEEKLY VIEW */}
         <h2 className="mt-8 font-pixel text-[10px] text-white/70">
           ► THIS WEEK (SUN - SAT)
         </h2>
@@ -626,12 +648,14 @@ export default function Tracker({
           Bibuji♥
         </p>
       </div>
+
       {/* 🍔 Hamburger Menu */}
       <HamburgerMenu
         isOpen={menuOpen}
         onClose={() => setMenuOpen(false)}
         uid={uid}
       />
+
       {/* 🥊 "All Quests Done" Modal */}
       {showFinishModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
@@ -644,14 +668,16 @@ export default function Tracker({
             </p>
             <div className="mt-6 grid grid-cols-2 gap-3">
               <button
-                onClick={pokePartner}
-                className="border-4 border-black bg-p2 py-3 font-pixel text-[10px] text-white shadow-[0_4px_0_0_#000] active:translate-y-1 active:shadow-none hover:brightness-110"
+                onClick={handlePoke} // ✅ Updated to call handlePoke
+                disabled={isPoking}
+                className="border-4 border-black bg-p2 py-3 font-pixel text-[10px] text-white shadow-[0_4px_0_0_#000] active:translate-y-1 active:shadow-none hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                POKE!
+                {isPoking ? "🔄 SENDING..." : " POKE!"}
               </button>
               <button
                 onClick={() => setShowFinishModal(false)}
-                className="border-4 border-black bg-night py-3 font-pixel text-[10px] text-white/60 shadow-[0_4px_0_0_#000] active:translate-y-1 active:shadow-none"
+                disabled={isPoking}
+                className="border-4 border-black bg-night py-3 font-pixel text-[10px] text-white/60 shadow-[0_4px_0_0_#000] active:translate-y-1 active:shadow-none disabled:opacity-50"
               >
                 NAH
               </button>
@@ -674,8 +700,7 @@ export default function Tracker({
   );
 }
 
-// 🆕 Updated PlayerCard with Trophy and Leader indicators
-// 🆕 Updated PlayerCard with Trophy and Leader indicators
+// 🆕 PlayerCard Component
 function PlayerCard({
   name,
   hex,
@@ -792,6 +817,7 @@ function PlayerCard({
   );
 }
 
+// 📰 NewsCard Component
 function NewsCard({
   title,
   roast,
@@ -827,6 +853,7 @@ function NewsCard({
   );
 }
 
+// 📅 WeekRow Component
 function WeekRow({
   label,
   hex,
@@ -849,8 +876,6 @@ function WeekRow({
         {week.map((d) => {
           const c = doneCount(hist[d], habits);
 
-          // Calculate fill width (33% for 1/3, 66% for 2/3, 100% for 3/3)
-          // If you prefer your exact 25/60/100 request, change these to "25%", "60%", "100%"
           let width = "0%";
           if (c === 1) width = "33%";
           if (c === 2) width = "66%";
@@ -862,13 +887,11 @@ function WeekRow({
               className="relative h-4 flex-1 border-2 border-black bg-[rgba(0,0,0,0.4)] overflow-hidden"
               title={`${c}/3 tasks completed`}
             >
-              {/* The colored fill bar */}
               <div
                 className="absolute left-0 top-0 h-full transition-all duration-300"
                 style={{
                   width: width,
                   backgroundColor: hex,
-                  // Only add the glow when it's 100% full (perfect day)
                   boxShadow: c === 3 ? `0 0 6px ${hex}` : "none",
                 }}
               />
