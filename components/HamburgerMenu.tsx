@@ -1,22 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 
 export function HamburgerMenu({
   isOpen,
   onClose,
-  myName,
-  herName,
-  myPrevPoints,
-  herPrevPoints,
+
 }: {
   isOpen: boolean;
   onClose: () => void;
-  myName: string;
-  herName: string | null;
-  myPrevPoints: number;
-  herPrevPoints: number;
 }) {
   if (!isOpen) return null;
 

@@ -630,13 +630,6 @@ export default function Tracker({
       <HamburgerMenu
         isOpen={menuOpen}
         onClose={() => setMenuOpen(false)}
-        myName={myName}
-        herName={herName}
-        myPrevPoints={myPrevPoints}
-        herPrevPoints={herPrevPoints}
-        coupleId={coupleId}
-        uid={uid}
-        partnerUid={partnerUid}
       />
       {/* 🥊 "All Quests Done" Modal */}
       {showFinishModal && (
