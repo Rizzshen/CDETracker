@@ -26,6 +26,18 @@ export default function Home() {
     });
   }, []);
 
+  // ✅ CORRECT - uses the actual variable names in this component
+  useEffect(() => {
+    if (authUser?.uid && profile?.coupleId) {
+      localStorage.setItem("uid", authUser.uid);
+      localStorage.setItem("coupleId", profile.coupleId);
+      console.log("✅ Saved to localStorage:", {
+        uid: authUser.uid,
+        coupleId: profile.coupleId,
+      });
+    }
+  }, [authUser?.uid, profile?.coupleId]);
+
   useEffect(() => {
     if (!authUser) {
       setProfile(null);

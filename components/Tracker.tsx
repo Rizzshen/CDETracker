@@ -634,6 +634,9 @@ export default function Tracker({
         herName={herName}
         myPrevPoints={myPrevPoints}
         herPrevPoints={herPrevPoints}
+        coupleId={coupleId}
+        uid={uid}
+        partnerUid={partnerUid}
       />
       {/* 🥊 "All Quests Done" Modal */}
       {showFinishModal && (
