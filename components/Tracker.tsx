@@ -630,6 +630,7 @@ export default function Tracker({
       <HamburgerMenu
         isOpen={menuOpen}
         onClose={() => setMenuOpen(false)}
+        uid={uid}
       />
       {/* 🥊 "All Quests Done" Modal */}
       {showFinishModal && (

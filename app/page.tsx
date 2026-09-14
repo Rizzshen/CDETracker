@@ -8,6 +8,7 @@ import AuthForm from "@/components/AuthForm";
 import TeamGate from "@/components/TeamGate";
 import Tracker from "@/components/Tracker";
 
+
 type Profile = { uid: string; email?: string; coupleId?: string | null };
 
 export default function Home() {
@@ -18,6 +19,7 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => {

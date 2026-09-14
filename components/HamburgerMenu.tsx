@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { NotificationSettings } from "@/components/NotificationSettings";
 
 export function HamburgerMenu({
   isOpen,
   onClose,
-
+  uid,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  uid: string;
 }) {
   if (!isOpen) return null;
 
@@ -60,6 +62,9 @@ export function HamburgerMenu({
             <span className="text-lg">📅</span>
             <span>MONTHLY TRACK</span>
           </Link>
+          <div className="mt-6 border-t-2 border-white/10 pt-4">
+            <NotificationSettings uid={uid} />
+          </div>
 
           <div className="mt-6 border-t-2 border-white/10 pt-4">
             <p className="font-pixel text-[7px] text-white/40">
