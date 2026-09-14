@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   setDoc,
   where,
+  deleteField,
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
@@ -75,10 +76,29 @@ export default function Tracker({
   const [deny, setDeny] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const denyTimer = useRef<number | null>(null);
+  const [showFinishModal, setShowFinishModal] = useState(false);
+  const [pokeMessage, setPokeMessage] = useState<string | null>(null);
 
   useEffect(() => {
     return onSnapshot(doc(db, "users", uid), (s) => {
-      setMyProfile((s.data() as Profile) ?? null);
+      const data =
+        (s.data() as Profile & { pokedBy?: string; pokeTime?: any }) ?? null;
+      setMyProfile(data);
+
+      // 🆕 Detect incoming poke on MY profile
+      if (data?.pokedBy && data?.pokeTime) {
+        setPokeMessage(`${data.pokedBy} poked you! 🥊`);
+
+        // Clear the poke from the database immediately so it doesn't trigger again
+        setDoc(
+          doc(db, "users", uid),
+          { pokedBy: deleteField(), pokeTime: deleteField() },
+          { merge: true },
+        );
+
+        // Auto-dismiss the message after 4 seconds
+        setTimeout(() => setPokeMessage(null), 4000);
+      }
     });
   }, [uid]);
 
@@ -97,7 +117,7 @@ export default function Tracker({
       return;
     }
     return onSnapshot(doc(db, "users", partnerUid), (s) => {
-      setPartner((s.data() as Profile) ?? null);
+      setPartner((s.data() as Profile) ?? null); // Keep it simple, no poke logic here
     });
   }, [partnerUid]);
 
@@ -162,16 +182,41 @@ export default function Tracker({
   }, [partnerUid, today]);
 
   async function toggle(habitId: string) {
+    const isCheckingOn = !myDay[habitId];
+
     await setDoc(
       doc(db, "completions", `${uid}_${today}`),
       {
         userId: uid,
         date: today,
-        [habitId]: !myDay[habitId],
+        [habitId]: isCheckingOn,
         updatedAt: serverTimestamp(),
       },
       { merge: true },
     );
+
+    // 🆕 If we just checked a box ON, and it makes the day perfect, show the modal
+    if (isCheckingOn) {
+      const newDayData = { ...myDay, [habitId]: true };
+      if (doneCount(newDayData, myHabits) === myHabits.length) {
+        setShowFinishModal(true);
+      }
+    }
+  }
+  async function pokePartner() {
+    if (!partnerUid) return;
+
+    // Update partner's user doc with the poke data
+    await setDoc(
+      doc(db, "users", partnerUid),
+      {
+        pokedBy: myName,
+        pokeTime: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    setShowFinishModal(false);
   }
 
   function openEditor() {
@@ -261,7 +306,9 @@ export default function Tracker({
   );
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-night font-retro text-white">
+    <main
+      className={`relative min-h-dvh overflow-hidden bg-night font-retro text-white ${pokeMessage ? "animate-shake" : ""}`}
+    >
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:24px_24px]" />
       <div className="pointer-events-none fixed inset-0 z-50 bg-[repeating-linear-gradient(0deg,rgba(0,0,0,0.22)_0px,rgba(0,0,0,0.22)_1px,transparent_1px,transparent_3px)]" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgba(0,0,0,0.55)_100%)]" />
@@ -588,6 +635,44 @@ export default function Tracker({
         myPrevPoints={myPrevPoints}
         herPrevPoints={herPrevPoints}
       />
+      {/* 🥊 "All Quests Done" Modal */}
+      {showFinishModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-xs border-4 border-black bg-panel p-6 text-center shadow-[0_8px_0_0_#000] animate-pop-in">
+            <h2 className="font-pixel text-[12px] text-lime [text-shadow:0_0_8px_rgba(141,255,91,0.6)]">
+              QUESTS COMPLETE!
+            </h2>
+            <p className="mt-3 font-retro text-sm text-white/80">
+              You crushed it today. Want to show off?
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                onClick={pokePartner}
+                className="border-4 border-black bg-p2 py-3 font-pixel text-[10px] text-white shadow-[0_4px_0_0_#000] active:translate-y-1 active:shadow-none hover:brightness-110"
+              >
+                POKE!
+              </button>
+              <button
+                onClick={() => setShowFinishModal(false)}
+                className="border-4 border-black bg-night py-3 font-pixel text-[10px] text-white/60 shadow-[0_4px_0_0_#000] active:translate-y-1 active:shadow-none"
+              >
+                NAH
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💥 Incoming Poke Message */}
+      {pokeMessage && (
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center">
+          <div className="border-4 border-black bg-[#2a1020] p-4 shadow-[0_8px_0_0_#000] animate-pop-in">
+            <p className="font-pixel text-[12px] text-coin [text-shadow:0_0_8px_rgba(255,217,61,0.8)]">
+              {pokeMessage}
+            </p>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
